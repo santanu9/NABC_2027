@@ -1,44 +1,48 @@
-/* NABC 2027 Program Planner — frontend */
+/* NABC 2027 Program Planner — frontend (GitHub Pages + Firebase) */
+import { DAYS, D, api, configured, requestLink, completeLinkIfPresent, logout, onUser, loadAccess, subscribe, unsubscribeAll } from './data.js';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const STATUS = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
 const CATS = ['AV', 'Tent', 'Venue', 'Expo', 'Registration', 'Program', 'Food', 'Security', 'Volunteers', 'Transport', 'Other'];
-let S = null;            // server state
+let S = null;            // view state: D + days + me
 let view = 'plan', day = 'all', layout = 'list';
 
-async function api(method, url, body) {
-  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  const j = await r.json().catch(() => ({}));
-  if (r.status === 401 && !url.startsWith('/api/auth/')) { S = null; showLogin(); throw new Error('Please log in'); }
-  if (!r.ok) throw new Error(j.error || r.statusText);
-  return j;
-}
-function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3000); }
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 3500); }
 const isAdmin = () => S.me.role === 'admin';
 const canEdit = (t) => isAdmin() || (t.leadEmail || '').toLowerCase() === S.me.email;
-async function refresh() {
-  const me = await api('GET', '/api/auth/me');
-  if (!me.email) return showLogin();
-  S = await api('GET', '/api/state');
+async function refresh() { if (S) render(); }   // Firestore snapshots push updates automatically
+
+function lock(html) {
+  S = null; unsubscribeAll();
+  document.body.classList.add('locked'); $('#login').hidden = false; $('#who').innerHTML = '';
+  const f = $('#loginForm'); f.innerHTML = html; f.onsubmit = (e) => e.preventDefault(); return f;
+}
+function showLogin(msg = '') {
+  const f = lock(`<h2>Sign in</h2><p>Access is limited to NABC 2027 admins and task leads. Enter your email and we'll send a one-time sign-in link.</p>${configured ? '' : '<p class="lmsg">Firebase is not configured yet — see README.</p>'}<label>Email</label><input id="lemail" type="email" required autocomplete="email"><p><button class="btn gold" type="submit">Email me a sign-in link</button></p><p id="lmsg" class="lmsg">${esc(msg)}</p>`);
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    try { await requestLink($('#lemail').value); f.innerHTML = '<h2>Check your inbox</h2><p>If this email is authorised, you will get a sign-in link. Open it in this same browser. The link works once.</p>'; }
+    catch (er) { $('#lmsg').textContent = 'Could not send the link. Try again shortly.'; }
+  };
+}
+function showDenied(email) {
+  const f = lock(`<h2>Not authorised</h2><p>${esc(email)} is not on the NABC 2027 access list. Ask an admin to add you as an admin or as a task lead.</p><p><button class="btn" id="bk">Sign out</button></p>`);
+  $('#bk').onclick = () => logout();
+}
+async function start(user) {
+  if (!user) return showLogin();
+  let me;
+  try { me = await loadAccess(user); }
+  catch (e) { return e.code === 'uninit' ? (lock(`<h2>Not set up yet</h2><p>${esc(e.message)}</p><p><button class="btn" id="bk">Sign out</button></p>`), $('#bk').onclick = () => logout()) : showDenied(user.email); }
+  S = { days: DAYS, me, venues: [], milestones: [], tasks: [], settings: D.settings };
   document.body.classList.remove('locked'); $('#login').hidden = true;
-  $('#who').innerHTML = `${esc(S.me.email)} <small>${S.me.role}</small> <button class="btn sm" id="logout">Log out</button>`;
-  $('#logout').onclick = async () => { await api('POST', '/api/auth/logout'); S = null; showLogin(); };
+  $('#who').innerHTML = `${esc(me.email)} <small>${me.role}</small> <button class="btn sm" id="logout">Log out</button>`;
+  $('#logout').onclick = () => logout();
   $('#addTaskTop').hidden = !isAdmin();
   document.querySelector('[data-view="settings"]').hidden = !isAdmin();
   if (!isAdmin() && view === 'settings') view = 'plan';
-  render();
-}
-function showLogin() {
-  document.body.classList.add('locked'); $('#login').hidden = false; $('#who').innerHTML = '';
-  const f = $('#loginForm'); let email = '';
-  f.innerHTML = `<h2>Sign in</h2><p>Access is limited to NABC 2027 admins and task leads. Enter your email to receive a one-time code.</p><label>Email</label><input id="lemail" type="email" required autocomplete="email"><p><button class="btn gold" type="submit">Send code</button></p><p id="lmsg" class="lmsg"></p>`;
-  f.onsubmit = async (e) => {
-    e.preventDefault(); email = $('#lemail').value;
-    try { const r = await api('POST', '/api/auth/request', { email });
-      f.innerHTML = `<h2>Enter code</h2><p>${esc(r.message)}</p><label>6-digit code</label><input id="lcode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required><p><button class="btn gold" type="submit">Verify</button></p><p id="lmsg" class="lmsg"></p>`;
-      f.onsubmit = async (e2) => { e2.preventDefault(); try { await api('POST', '/api/auth/verify', { email, code: $('#lcode').value }); refresh(); } catch (er) { $('#lmsg').textContent = er.message; } };
-    } catch (er) { $('#lmsg').textContent = er.message; }
-  };
+  subscribe((d) => { if (!S) return; Object.assign(S, { venues: d.venues, milestones: d.milestones, tasks: d.tasks, settings: d.settings }); if (!$('#dlg').open) render(); },
+    () => showDenied(me.email));
 }
 
 const venueName = (id) => (S.venues.find((v) => v.id === id) || { name: id }).name;
@@ -177,7 +181,7 @@ function renderTasks() {
   box.querySelectorAll('[data-toggle]').forEach((r) => r.onclick = () => { const id = r.dataset.toggle; open.has(id) ? open.delete(id) : open.add(id); renderTasks(); });
   box.querySelectorAll('[data-edit]').forEach((b) => b.onclick = () => taskDialog(S.tasks.find((t) => t.id === b.dataset.edit)));
   box.querySelectorAll('[data-remind]').forEach((b) => b.onclick = async () => {
-    try { const r = await api('POST', `/api/tasks/${b.dataset.remind}/remind`); toast(r.reason || (r.dryRun ? `Dry run (SMTP not configured) → ${r.to.join(', ')}` : `Reminder sent to ${r.sent} recipient(s)`)); }
+    try { const r = await api('POST', `/api/tasks/${b.dataset.remind}/remind`); toast('Reminder queued — it is emailed within about 10 minutes'); }
     catch (e) { toast('Failed: ' + e.message); }
   });
   box.querySelectorAll('.row[draggable]').forEach((c) => c.ondragstart = (e) => e.dataTransfer.setData('id', c.dataset.id));
@@ -308,8 +312,8 @@ async function renderSettings() {
   const log = await api('GET', '/api/outbox');
   const up = S.tasks.filter((t) => t.status !== 'done' && t.eta && etaMs(t) > Date.now() && (t.leadEmail || (t.team || []).some((p) => p.email))).sort((a, b) => etaMs(a) - etaMs(b)).slice(0, 10);
   $('#v-settings').innerHTML = `<div class="panel"><h2>Email reminders</h2>
-    <p>Status: ${S.smtpConfigured ? '<span class="pill ok">SMTP configured — emails are sent</span>' : '<span class="pill warn">Dry-run — SMTP not configured, emails are only logged</span>'}</p>
-    <p class="hint">The server checks every minute and emails the lead POC and team members as each task's ETA approaches, plus one overdue notice. Tasks marked <b>Done</b> never send. Set SMTP_* in <code>.env</code> to send for real.</p>
+    <p><span class="pill ok">Sent by a scheduled GitHub Actions job (about every 10 minutes)</span></p>
+    <p class="hint">The server checks every minute and emails the lead POC and team members as each task's ETA approaches, plus one overdue notice. Tasks marked <b>Done</b> never send. Reminders need the SMTP secrets set in the GitHub repo (see README).</p>
     <div class="fg"><div><label>Default reminders (hours before ETA)</label><input id="rh" value="${S.settings.reminderHours.join(', ')}"></div>
     <div><label>Overdue notice</label><select id="od"><option value="1" ${S.settings.overdueReminder ? 'selected' : ''}>On</option><option value="0" ${!S.settings.overdueReminder ? 'selected' : ''}>Off</option></select></div></div>
     <p><button class="btn primary" id="saveSet">Save settings</button></p></div>
@@ -321,5 +325,7 @@ async function renderSettings() {
   };
 }
 
-refresh();
-setInterval(() => { if (view === 'plan' && !$('#dlg').open) refresh(); }, 60000);
+(async () => {
+  try { await completeLinkIfPresent(); } catch (e) { showLogin('That sign-in link is invalid or expired. Request a new one.'); }
+  onUser(start);
+})();
