@@ -1,0 +1,8 @@
+{
+  "name": "nabc2027-program-planner",
+  "version": "1.0.0",
+  "description": "NABC 2027 program plan & task tracker with email reminders",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^4.19.2", "nodemailer": "^6.9.14" }
+}

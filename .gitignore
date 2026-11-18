@@ -1,0 +1,9 @@
+node_modules/
+data/db.json
+data/outbox.log
+.env
+.DS_Store
+data/sessions.json
+data/*.json
+data/*.log
+*.pem
