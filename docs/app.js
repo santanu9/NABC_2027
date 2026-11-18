@@ -1,5 +1,5 @@
 /* NABC 2027 Program Planner — frontend (GitHub Pages + Firebase) */
-import { DAYS, D, api, configured, requestLink, completeLinkIfPresent, logout, onUser, loadAccess, subscribe, unsubscribeAll } from './data.js';
+import { DAYS, D, api, configured, requestLink, signInGoogle, completeLinkIfPresent, logout, onUser, loadAccess, subscribe, unsubscribeAll } from './data.js';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const STATUS = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
@@ -18,10 +18,21 @@ function lock(html) {
   const f = $('#loginForm'); f.innerHTML = html; f.onsubmit = (e) => e.preventDefault(); return f;
 }
 function showLogin(msg = '') {
-  const f = lock(`<h2>Sign in</h2><p>Access is limited to NABC 2027 admins and task leads. Enter your email and we'll send a one-time sign-in link.</p>${configured ? '' : '<p class="lmsg">Firebase is not configured yet — see README.</p>'}<label>Email</label><input id="lemail" type="email" required autocomplete="email"><p><button class="btn gold" type="submit">Email me a sign-in link</button></p><p id="lmsg" class="lmsg">${esc(msg)}</p>`);
+  const f = lock(`<h2>Sign in</h2><p>Access is limited to NABC 2027 admins and task leads.</p>${configured ? '' : '<p class="lmsg">Firebase is not configured yet — see README.</p>'}
+    <p><button class="btn gold gbtn" type="button" id="gbtn"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.1 0 24s.9 7.6 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg> Continue with Google</button></p>
+    <p class="alt"><a href="#" id="alt">Don't use Google? Get an email sign-in link instead</a></p><p id="lmsg" class="lmsg">${esc(msg)}</p>`);
+  $('#gbtn').onclick = async () => {
+    try { await signInGoogle(); }
+    catch (er) { $('#lmsg').textContent = er.code === 'auth/popup-closed-by-user' || er.code === 'auth/cancelled-popup-request' ? '' : 'Google sign-in failed. Allow pop-ups for this site and try again.'; }
+  };
+  $('#alt').onclick = (e) => { e.preventDefault(); showEmailLogin(); };
+}
+function showEmailLogin() {
+  const f = lock(`<h2>Email sign-in</h2><p>Enter your email and we'll send a one-time sign-in link. Check spam if you don't see it (sender: NABC2027).</p><label>Email</label><input id="lemail" type="email" required autocomplete="email"><p><button class="btn gold" type="submit">Email me a sign-in link</button></p><p class="alt"><a href="#" id="back">Back</a></p><p id="lmsg" class="lmsg"></p>`);
+  $('#back').onclick = (e) => { e.preventDefault(); showLogin(); };
   f.onsubmit = async (e) => {
     e.preventDefault();
-    try { await requestLink($('#lemail').value); f.innerHTML = '<h2>Check your inbox</h2><p>If this email is authorised, you will get a sign-in link. Open it in this same browser. The link works once.</p>'; }
+    try { await requestLink($('#lemail').value); f.innerHTML = '<h2>Check your inbox</h2><p>If this email is authorised, you will get a sign-in link (check spam). The link works once.</p>'; }
     catch (er) { $('#lmsg').textContent = 'Could not send the link. Try again shortly.'; }
   };
 }

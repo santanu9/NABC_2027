@@ -161,3 +161,7 @@ details.keys .keylist{margin-top:8px}
 #loginForm h2{color:var(--navy);margin-bottom:6px}#loginForm p{color:var(--mut);font-size:14px}.lmsg{color:var(--red)!important;min-height:1em}
 body.locked main,body.locked .hero,body.locked footer{display:none}
 .stsel:disabled{opacity:.6;cursor:not-allowed}
+
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;background:#fff;color:var(--ink);border-color:var(--line);padding:11px 16px}
+.gbtn:hover{background:var(--paper);color:var(--ink)}
+.alt{font-size:13px;text-align:center}.alt a{color:var(--navy)}

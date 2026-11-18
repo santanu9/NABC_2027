@@ -1,6 +1,6 @@
 /* Data layer: Firebase Auth (email link) + Firestore. Authorisation is enforced by firestore.rules, not by this file. */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut }
+import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, doc, onSnapshot, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, orderBy, limit }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -33,6 +33,10 @@ export async function completeLinkIfPresent() {
   try { localStorage.removeItem('nabc_email'); } catch (_) {}
   history.replaceState(null, '', location.pathname); // strip the one-time link from the URL
   return true;
+}
+export async function signInGoogle() {
+  const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+  await signInWithPopup(auth, p);
 }
 export const logout = () => signOut(auth);
 export function onUser(cb) { return onAuthStateChanged(auth, cb); }
