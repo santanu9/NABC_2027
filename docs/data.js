@@ -1,6 +1,6 @@
 /* Data layer: Firebase Auth (email link) + Firestore. Authorisation is enforced by firestore.rules, not by this file. */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup }
+import { getAuth, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, doc, onSnapshot, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc, query, orderBy, limit }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -36,7 +36,13 @@ export async function completeLinkIfPresent() {
 }
 export async function signInGoogle() {
   const p = new GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+  // iOS Safari / mobile browsers handle pop-ups badly: use a full-page redirect there (same-origin auth domain on Hosting).
+  const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/i.test(navigator.platform));
+  if (mobile) return signInWithRedirect(auth, p);
   await signInWithPopup(auth, p);
+}
+export async function redirectError() {
+  try { await getRedirectResult(auth); return ''; } catch (e) { return e.code || 'error'; }
 }
 export const logout = () => signOut(auth);
 export function onUser(cb) { return onAuthStateChanged(auth, cb); }

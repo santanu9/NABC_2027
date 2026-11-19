@@ -1,5 +1,5 @@
 /* NABC 2027 Program Planner — frontend (GitHub Pages + Firebase) */
-import { DAYS, D, api, configured, requestLink, signInGoogle, completeLinkIfPresent, logout, onUser, loadAccess, subscribe, unsubscribeAll } from './data.js';
+import { DAYS, D, api, configured, requestLink, signInGoogle, redirectError, completeLinkIfPresent, logout, onUser, loadAccess, subscribe, unsubscribeAll } from './data.js';
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const STATUS = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' };
@@ -338,5 +338,6 @@ async function renderSettings() {
 
 (async () => {
   try { await completeLinkIfPresent(); } catch (e) { showLogin('That sign-in link is invalid or expired. Request a new one.'); }
-  onUser(start);
+  const re = await redirectError();
+  onUser((u) => (u ? start(u) : showLogin(re ? 'Google sign-in did not complete (' + re + '). Open this page directly in Safari or Chrome, not inside another app, and try again.' : '')));
 })();
